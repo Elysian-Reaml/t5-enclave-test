@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>T5 embedder</title>
+<h1>Enclave embedder test page</h1><p id="org"></p>
+<script>
+const q = new URLSearchParams(location.search);
+document.getElementById('org').textContent = 'origin: ' + location.origin + ' search: ' + location.search;
+const f = document.createElement('iframe');
+f.src = 'https://enclave.playground.idos.network';
+f.width = 430; f.height = 580; f.style.border = '2px solid #333';
+if (q.get('nr') === '1') { f.referrerPolicy = 'no-referrer'; }
+document.body.appendChild(f);
+</script>
