@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>T5 SDK host - bundle + decrypt</title>
+</head>
+<body>
+<h1>idOS SDK host — T5 origin test (bundle + forced decrypt)</h1>
+<p id="org"></p>
+<label>Test wallet private key: <input id="pk" type="password" size="70"></label>
+<button id="go">Init + LogIn</button>
+<button id="seed">Seed credential + decrypt it (forces enclave unlock)</button>
+<pre id="log" style="white-space:pre-wrap;border:1px solid #999;padding:8px;min-height:140px"></pre>
+<div id="idOS-enclave" style="width:460px;height:620px;border:2px solid #333"></div>
+<script>
+  document.getElementById('org').textContent = 'This page origin: ' + location.origin;
+  window.__log = function (s) { document.getElementById('log').textContent += s + '\n'; };
+  setTimeout(() => { if (!window.__t5) window.__log('BUNDLE FAILED TO LOAD (window.__t5 missing after 15s)'); }, 15000);
+</script>
+<script type="module">
+import './bundle.js';
+const log = (s) => window.__log(s);
+log('bundle loaded; SDK ready');
+const { idOSClientConfiguration, Wallet } = window.__t5;
+let loggedIn = null;
+async function doLogin() {
+  try {
+    const pk = document.getElementById('pk').value.trim();
+    if (!pk) { log('no private key entered'); return; }
+    const config = new idOSClientConfiguration({
+      nodeUrl: 'https://nodes.playground.idos.network',
+      enclaveOptions: { container: '#idOS-enclave', url: 'https://enclave.playground.idos.network' }
+    });
+    const client = await config.createClient();
+    const signer = new Wallet(pk);
+    log('signer address: ' + signer.address);
+    const withSigner = await client.withUserSigner(signer);
+    log('hasProfile: ' + String(await withSigner.hasProfile()));
+    loggedIn = await withSigner.logIn();
+    log('LOGIN SUCCESS (note: logIn alone does not unlock the enclave)');
+    const all = await loggedIn.getAllCredentials();
+    log('getAllCredentials count: ' + String(all.length));
+  } catch (e) {
+    log('LOGIN ERROR: ' + ((e && e.message) || e));
+  }
+}
+async function doSeedDecrypt() {
+  if (!loggedIn) { log('not logged in yet'); return; }
+  try {
+    log('creating a self-owned test credential...');
+    const meta = await loggedIn.createCredential('t5-origin-test', new TextEncoder().encode('t5 origin test credential'));
+    log('credential created, id: ' + meta.id);
+    log('requesting content hash - this forces enclave decryption; watch the frame for a prompt');
+    const raced = await Promise.race([
+      loggedIn.getCredentialContentSha256Hash(meta.id).then(h => 'HASH OK: ' + h),
+      new Promise(res => setTimeout(() => res('DECRYPT TIMEOUT after 30s (no response from enclave)'), 30000))
+    ]);
+    log(String(raced));
+  } catch (e) {
+    log('SEED/DECRYPT ERROR: ' + ((e && e.message) || e));
+  }
+}
+document.getElementById('go').addEventListener('click', doLogin);
+document.getElementById('seed').addEventListener('click', doSeedDecrypt);
+</script>
+</body>
+</html>
